@@ -72,6 +72,7 @@ userSchema.methods.getJwtToken = function () {
 //generate forgot password token
 
 userSchema.methods.generateForgotPasswordToken = function () {
+    console.log("🚀 ~ file: user.js ~ line 75 ~ generateForgotPasswordToken")
     
   //generate long password token
   const forgotToken = crypto.randomBytes(20).toString("hex");
@@ -80,7 +81,8 @@ userSchema.methods.generateForgotPasswordToken = function () {
   this.forgot_password_token = crypto.createHash("sha256").update(forgotToken).digest("hex");
 
   //timeof token
-  this.forgot_password_expires_at = Date.now() + process.env.FORGOT_PASSWORD_EXPIRY;
+  this.forgot_password_expires_at = Date.now() + 20 * 60 * 1000;
+  
   return forgotToken;
 };
 
