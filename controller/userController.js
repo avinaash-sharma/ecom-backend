@@ -8,14 +8,10 @@ const mailHelper = require("../util/emailHelper");
 var crypto = require("crypto");
 
 exports.signup = HOCPromise(async (req, res, next) => {
-  let result;
-  if (req.files) {
-    let file = req.files.photo;
-    result = await cloudinary.v2.uploader.upload(file.tempFilePath, {
-      folder: "users",
-      width: 150,
-      crop: "scale",
-    });
+  // let result;
+
+  if (!req.files) {
+    return next(new CustomErrorHandler("photo is required for signup", 400));
   }
 
   const { name, email, password } = req.body;
@@ -27,6 +23,13 @@ exports.signup = HOCPromise(async (req, res, next) => {
       )
     );
   }
+
+  let file = req.files.photo;
+  const result = await cloudinary.v2.uploader.upload(file.tempFilePath, {
+    folder: "users",
+    width: 150,
+    crop: "scale",
+  });
 
   const user = await User.create({
     name,
@@ -98,7 +101,9 @@ exports.forgotPassword = HOCPromise(async (req, res, next) => {
   await user.save({ validateBeforeSave: false });
 
   //   creating the url with token
-  const url = `${req.protocol}://${req.get("host")}/api/v1/password/reset/${forgotToken}`;
+  const url = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/password/reset/${forgotToken}`;
   // created the message for the mail
   const message = `Copy paste this link in your URL and hit enter \n\n ${url}`;
 
@@ -125,11 +130,16 @@ exports.forgotPassword = HOCPromise(async (req, res, next) => {
 
 exports.passwordReset = HOCPromise(async (req, res, next) => {
   const token = req.params.token;
-//   console.log("🚀 ~ file: userController.js ~ line 128 ~ exports.passwordReset=HOCPromise ~ token", token)
-  
+  //   console.log("🚀 ~ file: userController.js ~ line 128 ~ exports.passwordReset=HOCPromise ~ token", token)
 
-  const encryptedToken = crypto.createHash("sha256").update(token).digest("hex");
-  console.log("🚀 ~ file: userController.js ~ line 132 ~ exports.passwordReset=HOCPromise ~ encryptedToken", encryptedToken)
+  const encryptedToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+  console.log(
+    "🚀 ~ file: userController.js ~ line 132 ~ exports.passwordReset=HOCPromise ~ encryptedToken",
+    encryptedToken
+  );
   // $gt refers to greater than, here it would check if the time is greater than the current time.
   const tokenUser = await User.findOne({
     encryptedToken,
@@ -159,14 +169,10 @@ exports.passwordReset = HOCPromise(async (req, res, next) => {
   cookieToken(tokenUser, res);
 });
 
-
 exports.getLoggedInUser = HOCPromise(async (req, res, next) => {
   const user = await User.findById(req.user);
 
-  
-
-  res.status(200).json({ success: true, user});
-
+  res.status(200).json({ success: true, user });
 });
 
 exports.changePassword = HOCPromise(async (req, res, next) => {
@@ -174,15 +180,13 @@ exports.changePassword = HOCPromise(async (req, res, next) => {
   const oldPassword = req.body.oldPassword;
 
   const user = await User.findById(userId).select("+password");
-  
-  // console.log("🚀 ~ file: userController.js ~ line 176 ~ exports.changePassword=HOCPromise ~ user", user)
- 
-  
-  const validOldPassword = await user.isPasswordValid(oldPassword)
-  
 
-  if(!validOldPassword) {
-    return next(new CustomErrorHandler('old password is incorrect', 400));
+  // console.log("🚀 ~ file: userController.js ~ line 176 ~ exports.changePassword=HOCPromise ~ user", user)
+
+  const validOldPassword = await user.isPasswordValid(oldPassword);
+
+  if (!validOldPassword) {
+    return next(new CustomErrorHandler("old password is incorrect", 400));
   }
 
   user.password = req.body.password;
@@ -191,16 +195,13 @@ exports.changePassword = HOCPromise(async (req, res, next) => {
 });
 
 exports.updateUserDetails = HOCPromise(async (req, res, next) => {
-
   const data = {
     name: req.body.name,
     email: req.body.email,
   };
 
-  
-  if(req.files){
-    
-    const user = await User.findById(req.user.id)
+  if (req.files) {
+    const user = await User.findById(req.user.id);
     const imageId = user.photo.id;
     //deleting the image on cloudinary.
     const resp = await cloudinary.v2.uploader.destroy(imageId);
@@ -212,8 +213,8 @@ exports.updateUserDetails = HOCPromise(async (req, res, next) => {
     });
     data.photo = {
       id: result.public_id,
-      secure_url: result.secure_url
-    }
+      secure_url: result.secure_url,
+    };
   }
 
   const user = await User.findByIdAndUpdate(req.user.id, data, {
@@ -223,21 +224,112 @@ exports.updateUserDetails = HOCPromise(async (req, res, next) => {
   });
 
   if (!user) {
-    return next(
-      new CustomErrorHandler("Something went wrong", 400)
-    );
+    return next(new CustomErrorHandler("Something went wrong", 400));
   }
 
   res.status(200).json({
     success: true,
-    message: "User details updated successfully"
-  })
-
+    message: "User details updated successfully",
+  });
 });
 
 exports.adminAllUser = HOCPromise(async (req, res, next) => {
   const users = await User.find();
 
-  res.status(200).json({success: true, users});
+  res.status(200).json({ success: true, users });
+});
 
+exports.managerAllUser = HOCPromise(async (req, res, next) => {
+  const users = await User.find({ role: "user" });
+
+  res.status(200).json({ success: true, users });
+});
+
+exports.adminGetOneUser = HOCPromise(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    next(new CustomErrorHandler("No user found", 400));
+  }
+  res.status(200).json({ success: true, user });
+});
+
+exports.adminUpdateOneUserDetails = HOCPromise(async (req, res, next) => {
+  const data = {
+    name: req.body.name,
+    email: req.body.email,
+    role: req.body.role,
+  };
+
+  // if(req.files){
+
+  //   const user = await User.findById(req.user.id)
+  //   const imageId = user.photo.id;
+  //   //deleting the image on cloudinary.
+  //   const resp = await cloudinary.v2.uploader.destroy(imageId);
+  //   //uploading the latest one.
+  //   result = await cloudinary.v2.uploader.upload(req.files.photo.tempFilePath, {
+  //     folder: "users",
+  //     width: 150,
+  //     crop: "scale",
+  //   });
+  //   data.photo = {
+  //     id: result.public_id,
+  //     secure_url: result.secure_url
+  //   }
+  // }
+
+  const user = await User.findByIdAndUpdate(req.params.id, data, {
+    new: true,
+    runValidators: true,
+    useFindAndModify: false,
+  });
+
+  if (!user) {
+    return next(new CustomErrorHandler("Something went wrong", 400));
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "User details updated successfully",
+  });
+});
+
+exports.adminDeleteOneUserDetails = HOCPromise(async (req, res, next) => {
+  // const data = {
+  //   name: req.body.name,
+  //   email: req.body.email,
+  //   role: req.body.role,
+  // };
+
+  // if(req.files){
+
+  //   const user = await User.findById(req.user.id)
+  //   const imageId = user.photo.id;
+  //   //deleting the image on cloudinary.
+  //   const resp = await cloudinary.v2.uploader.destroy(imageId);
+  //   //uploading the latest one.
+  //   result = await cloudinary.v2.uploader.upload(req.files.photo.tempFilePath, {
+  //     folder: "users",
+  //     width: 150,
+  //     crop: "scale",
+  //   });
+  //   data.photo = {
+  //     id: result.public_id,
+  //     secure_url: result.secure_url
+  //   }
+  // }
+
+  const user = await User.findOneAndDelete(req.params.id, {
+    rawResult: true,
+    
+  });
+
+  if (!user) {
+    return next(new CustomErrorHandler("Something went wrong", 400));
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "User details updated successfully",
+  });
 });
